@@ -1996,52 +1996,33 @@ class BaseBlobService(StorageClient):
 
         # Send a context object to make sure we always retry to the initial location
         operation_context = _OperationContext(location_lock=True)
-        try:
-            blob = self._get_blob(container_name,
-                                  blob_name,
-                                  snapshot,
-                                  start_range=initial_request_start,
-                                  end_range=initial_request_end,
-                                  validate_content=validate_content,
-                                  lease_id=lease_id,
-                                  if_modified_since=if_modified_since,
-                                  if_unmodified_since=if_unmodified_since,
-                                  if_match=if_match,
-                                  if_none_match=if_none_match,
-                                  timeout=timeout,
-                                  _context=operation_context)
 
-            # Parse the total blob size and adjust the download size if ranges
-            # were specified
-            blob_size = _parse_length_from_content_range(blob.properties.content_range)
-            if end_range is not None:
-                # Use the end_range unless it is over the end of the blob
-                download_size = min(blob_size, end_range - start_range + 1)
-            elif start_range is not None:
-                download_size = blob_size - start_range
-            else:
-                download_size = blob_size
-        except AzureHttpError as ex:
-            if start_range is None and ex.status_code == 416:
-                # Get range will fail on an empty blob. If the user did not
-                # request a range, do a regular get request in order to get
-                # any properties.
-                blob = self._get_blob(container_name,
-                                      blob_name,
-                                      snapshot,
-                                      validate_content=validate_content,
-                                      lease_id=lease_id,
-                                      if_modified_since=if_modified_since,
-                                      if_unmodified_since=if_unmodified_since,
-                                      if_match=if_match,
-                                      if_none_match=if_none_match,
-                                      timeout=timeout,
-                                      _context=operation_context)
+        kwargs = dict(validate_content=validate_content,
+                      lease_id=lease_id,
+                      if_modified_since=if_modified_since,
+                      if_unmodified_since=if_unmodified_since,
+                      if_match=if_match,
+                      if_none_match=if_none_match,
+                      timeout=timeout,
+                      _context=operation_context)
 
-                # Set the download size to empty
-                download_size = 0
-            else:
-                raise ex
+        if start_range is not None:
+            assert end_range is None
+            kwargs['start_range'] = initial_request_start
+            kwargs['end_range'] = initial_request_end
+
+        blob = self._get_blob(container_name, blob_name, snapshot, **kwargs)
+
+        # Parse the total blob size and adjust the download size if ranges
+        # were specified
+        blob_size = _parse_length_from_content_range(blob.properties.content_range)
+        if end_range is not None:
+            # Use the end_range unless it is over the end of the blob
+            download_size = min(blob_size, end_range - start_range + 1)
+        elif start_range is not None:
+            download_size = blob_size - start_range
+        else:
+            download_size = blob_size or blob.properties.content_length
 
         # Mark the first progress chunk. If the blob is small or this is a single
         # shot download, this is the only call
