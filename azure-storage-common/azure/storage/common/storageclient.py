@@ -421,7 +421,7 @@ class StorageClient(object):
                     # Sleep for the desired retry interval
                     sleep(retry_interval)
                 else:
-                    logger.error("%s Retry policy did not allow for a retry: "
+                    logger.info("%s Retry policy did not allow for a retry: "
                                  "%s, HTTP status code=%s, Exception=%s.",
                                  client_request_id_prefix,
                                  timestamp_and_request_id,

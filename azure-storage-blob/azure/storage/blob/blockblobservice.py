@@ -3,6 +3,8 @@
 # Licensed under the MIT License. See License.txt in the project root for
 # license information.
 # --------------------------------------------------------------------------
+import base64
+import codecs
 from io import (
     BytesIO
 )
@@ -487,7 +489,7 @@ class BlockBlobService(BaseBlobService):
         :param metadata:
             Name-value pairs associated with the blob as metadata.
         :type metadata: dict(str, str)
-        :param bool validate_content:
+        :param validate_content:
             If true, calculates an MD5 hash for each chunk of the blob. The storage
             service checks the hash of the content that has arrived with the hash
             that was sent. This is primarily valuable for detecting bitflips on
@@ -672,7 +674,7 @@ class BlockBlobService(BaseBlobService):
         :param metadata:
             Name-value pairs associated with the blob as metadata.
         :type metadata: dict(str, str)
-        :param bool validate_content:
+        :param validate_content:
             If true, calculates an MD5 hash for each chunk of the blob. The storage
             service checks the hash of the content that has arrived with the hash
             that was sent. This is primarily valuable for detecting bitflips on
@@ -1033,7 +1035,7 @@ class BlockBlobService(BaseBlobService):
             ContentSettings object used to set properties on the blob.
         :param metadata:
             Name-value pairs associated with the blob as metadata.
-        :param bool validate_content:
+        :param validate_content:
             If true, calculates an MD5 hash of the blob content. The storage
             service checks the hash of the content that has arrived
             with the hash that was sent. This is primarily valuable for detecting
@@ -1095,8 +1097,15 @@ class BlockBlobService(BaseBlobService):
         request.body = blob
 
         if validate_content:
-            computed_md5 = _get_content_md5(request.body)
-            request.headers['Content-MD5'] = _to_str(computed_md5)
+            if isinstance(validate_content, str) and len(validate_content) == 32:
+                # convert hexdigest md5 to base64 encoded form (required at least by azurite)
+                md5digest = codecs.decode(validate_content, 'hex')
+                base64_encoded_md5 = base64.b64encode(md5digest).decode('utf-8')
+            else:
+                base64_encoded_md5 = _get_content_md5(request.body)
+            import logging
+            logging.getLogger('azure').info("Use encoded md5 %s (input: %s)", base64_encoded_md5, validate_content)
+            request.headers['Content-MD5'] = base64_encoded_md5
 
         return self._perform_request(request, _parse_base_properties)
 
